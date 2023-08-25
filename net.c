@@ -8,6 +8,7 @@
 #include "util.h"
 #include "net.h"
 #include "ip.h"
+#include "icmp.h"
 
 /* NOTE: if you want to add/delete the entries after net_run(), you need to protect these lists with a mutex. */
 static struct net_device *devices;
@@ -250,6 +251,9 @@ net_init(void)
     if (ip_init() == -1) {
       infof("ip_init() failure");
       return -1;
+    }
+    if (icmp_init() == -1) {
+      infof("icmp_init() failure");
     }
     infof("initialized");
     return 0;
