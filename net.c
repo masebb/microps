@@ -153,14 +153,13 @@ net_input_handler(uint16_t type, const uint8_t *data, size_t len, struct net_dev
        }
        debugf("queue pushed (num: %u), dev=%s, type=0x%04x, len=%zu", proto->queue.num, dev->name, type, len);
        debugdump(data, len);
+       intr_raise_irq(INTR_IRQ_SOFTIRQ);
        return 0;
   }
   debugf("dev=%s, type=0x%04x, len=%zu", dev->name, type, len);
   debugdump(data, len);
-  intr_raise_irq(INTR_IRQ_SOFTIRQ);
   return 0;
   }
-  debugf("ahomanuke");
   //サポートしていないプロトコルは黙って捨てる
   return 0;
 }
