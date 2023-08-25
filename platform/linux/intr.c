@@ -24,10 +24,8 @@ static sigset_t sigmask;
 static pthread_t tid;
 static pthread_barrier_t barrier;
 
-int
-intr_request_irq(unsigned int irq, int (*handler)(unsigned int irq, void *dev), int flags, const char *name, void *dev)
-{
-    struct irq_entry *entry;
+int intr_request_irq(unsigned int irq, int (*handler)(unsigned int irq, void *dev), int flags, const char *name, void *dev){
+ struct irq_entry *entry;
 
     debugf("irq=%u, flags=%d, name=%s", irq, flags, name);
     for (entry = irqs; entry; entry = entry->next) {
@@ -55,14 +53,11 @@ intr_request_irq(unsigned int irq, int (*handler)(unsigned int irq, void *dev), 
     return 0;
 }
 
-int
-intr_raise_irq(unsigned int irq)
-{
-    return pthread_kill(tid, (int)irq);
+int intr_raise_irq(unsigned int irq){
+  return pthread_kill(tid, (int)irq);
 }
 
-static void *
-intr_thread(void *arg)
+static void * intr_thread(void *arg)
 {
     int terminate = 0, sig, err;
     struct irq_entry *entry;
@@ -93,8 +88,7 @@ intr_thread(void *arg)
     return NULL;
 }
 
-int
-intr_run(void)
+int intr_run(void)
 {
     int err;
 
@@ -112,10 +106,9 @@ intr_run(void)
     return 0;
 }
 
-void
-intr_shutdown(void)
+void intr_shutdown(void)
 {
-    if (pthread_equal(tid, pthread_self()) != 0) {
+      if (pthread_equal(tid, pthread_self()) != 0) {
         /* Thread not created. */
         return;
     }
@@ -123,8 +116,7 @@ intr_shutdown(void)
     pthread_join(tid, NULL);
 }
 
-int
-intr_init(void)
+int intr_init(void)
 {
     tid = pthread_self();
     pthread_barrier_init(&barrier, NULL, 2);
