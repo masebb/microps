@@ -98,7 +98,7 @@ void icmp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, s
   icmp_dump(data, len);
   switch (hdr->type) {
     case ICMP_TYPE_ECHO:
-      icmp_output(ICMP_TYPE_ECHOREPLY, hdr->code, hdr->values, (uint8_t *)(hdr+1), len - sizeof(*hdr), iface->unicast, dst);
+      icmp_output(ICMP_TYPE_ECHOREPLY, hdr->code, hdr->values, (uint8_t *)(hdr+1), len - sizeof(*hdr), iface->unicast, src);
       break;
     default:
       break;
