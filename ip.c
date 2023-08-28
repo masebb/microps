@@ -126,8 +126,7 @@ struct ip_iface * ip_iface_alloc(const char *unicast, const char *netmask){
     memory_free(iface);
     return NULL;
   }
-
-  iface->broadcast = iface->unicast | ~iface->broadcast;
+  iface->broadcast = (iface->unicast & iface->netmask) | ~iface->netmask;
 
   return iface;
 }

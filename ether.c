@@ -120,7 +120,7 @@ int ether_input_helper(struct net_device *dev, ether_input_func_t callback) {
   // 自身のアドレス宛か
   if (memcmp(dev->addr, hdr->dst, ETHER_ADDR_LEN) != 0) {
     // ブロードキャストアドレス宛か?
-    if (memcmp(ETHER_ADDR_BROADCAST, hdr->dst, ETHER_ADDR_LEN != 0)) {
+    if (memcmp(ETHER_ADDR_BROADCAST, hdr->dst, ETHER_ADDR_LEN) != 0) {
       // 自身向けじゃないので捨てる
       return -1;
     }

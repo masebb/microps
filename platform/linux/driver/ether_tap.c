@@ -1,5 +1,3 @@
-#include "test/test.h"
-#include <asm-generic/errno-base.h>
 #define _GNU_SOURCE /* for F_SETSIG */
 #include <stdio.h>
 #include <stdint.h>
