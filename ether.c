@@ -60,7 +60,7 @@ static void ether_dump(const uint8_t *frame, size_t flen) {
 #ifdef HEXDUMP
   hexdump(stderr, frame, flen);
 #endif
-  flockfile(stderr);
+  funlockfile(stderr);
 }
 
 //Ethernetフレームの生成と出力
@@ -83,7 +83,7 @@ int ether_transmit_helper(struct net_device *dev, uint16_t type, const uint8_t *
   // Ethernetヘッダ組み立て
   hdr = (struct ether_hdr *)frame;
   memcpy(hdr->dst, dst, ETHER_ADDR_LEN);
-  memcpy(hdr->dst, dev->addr, ETHER_ADDR_LEN);
+  memcpy(hdr->src, dev->addr, ETHER_ADDR_LEN);
   hdr->type = hton16(type);
   memcpy(hdr+1, data, len);
   // 最小サイズに満たない場合Paddingを追加(CSMA/CDの関係)

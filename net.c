@@ -9,6 +9,7 @@
 #include "net.h"
 #include "ip.h"
 #include "icmp.h"
+#include "arp.h"
 
 /* NOTE: if you want to add/delete the entries after net_run(), you need to protect these lists with a mutex. */
 static struct net_device *devices;
@@ -184,10 +185,7 @@ net_input_handler(uint16_t type, const uint8_t *data, size_t len, struct net_dev
        debugdump(data, len);
        intr_raise_irq(INTR_IRQ_SOFTIRQ);
        return 0;
-  }
-  debugf("dev=%s, type=0x%04x, len=%zu", dev->name, type, len);
-  debugdump(data, len);
-  return 0;
+    }
   }
   //サポートしていないプロトコルは黙って捨てる
   return 0;
@@ -247,6 +245,10 @@ net_init(void)
     if (intr_init() == -1) {
         errorf("intr_init() failure");
         return -1;
+    }
+    if (arp_init() == -1) {
+      infof("arp_init() failure");
+      return -1;
     }
     if (ip_init() == -1) {
       infof("ip_init() failure");

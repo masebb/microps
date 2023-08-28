@@ -85,7 +85,7 @@ static int ether_tap_open(struct net_device *dev) {
     close(tap->fd);
     return -1;
   }
-  if (fcntl(tap->fd, F_SETFL, tap->irq) == -1) {
+  if (fcntl(tap->fd, F_SETSIG, tap->irq) == -1) {
     errorf("fcntl(F_SETSIG): %s, dev=%s", strerror(errno), dev->name);
     close(tap->fd);
     return -1;
