@@ -171,14 +171,15 @@ int ip_protocol_register(uint8_t type, void (*handler)(const uint8_t *data, size
       return -1;
     }
   }
-  if (!memory_alloc(sizeof(*entry))) {
+  entry = memory_alloc(sizeof(*entry));
+  if (!entry) {
     errorf("memory_alloc() failed");
     return -1;
   }
   entry->type = type;
   entry->handler = handler;
-  //合ってる?
   entry->next = protocols;
+  protocols = entry;
 
   infof("protocol registerd, type=%u", entry->type);
   return 0;
