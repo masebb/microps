@@ -206,11 +206,11 @@ udp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct 
     return;
   }
   //絶対違うだろ
-  entry = memory_alloc(len - sizeof(*hdr));
+  entry = memory_alloc(sizeof(*entry) + (len - sizeof(*hdr)));
   entry->foreign.addr = src;
   entry->foreign.port = hdr->src;
-  entry->len = len;
-  memcpy(entry->data, data, sizeof(*data));
+  entry->len = len - sizeof(*hdr);
+  memcpy(entry->data, (uint8_t *)(hdr + 1), entry->len);
   if (!queue_push(&pcb->queue, entry)){
     errorf("failure queue_push()");
     mutex_unlock(&mutex);
