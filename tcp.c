@@ -230,10 +230,10 @@ tcp_output_segment(uint32_t seq, uint32_t ack, uint8_t flg, uint16_t wnd, uint8_
   hdr = (struct tcp_hdr *)buf;
 
   // ヘッダ作成
-  hdr->seq = seq;
-  hdr->ack = ack;
+  hdr->seq = hton32(seq);
+  hdr->ack = hton32(ack);
   hdr->flg = flg;
-  hdr->wnd = wnd;
+  hdr->wnd = hton16(wnd);
   hdr->src = local->port;
   hdr->dst = foreign->port;
   hdr->up = 0;
@@ -241,13 +241,12 @@ tcp_output_segment(uint32_t seq, uint32_t ack, uint8_t flg, uint16_t wnd, uint8_
   memcpy(hdr+1, data, len);
   hdr->sum = 0;
 
-  total = sizeof(*hdr) + len;
-
   //疑似ヘッダ
   pseudo.src = local->addr;
   pseudo.dst = foreign->addr;
   pseudo.zero = 0;
-  pseudo.protocol = IP_PROTOCOL_UDP;
+  pseudo.protocol = IP_PROTOCOL_TCP;
+  total = sizeof(*hdr) + len;
   pseudo.len = hton16(total);
   psum = ~cksum16((uint16_t *)&pseudo, sizeof(pseudo), 0);
 
