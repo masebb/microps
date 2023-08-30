@@ -12,6 +12,7 @@
 #include "icmp.h"
 #include "arp.h"
 #include "udp.h"
+#include "tcp.h"
 
 /* NOTE: if you want to add/delete the entries after net_run(), you need to protect these lists with a mutex. */
 static struct net_device *devices;
@@ -353,6 +354,9 @@ net_init(void)
     }
     if (udp_init() == -1 ) {
       infof("udp_init() failure");
+    }
+    if (tcp_init() == -1) {
+      infof("tcp_init() failure");
     }
     infof("initialized");
     return 0;
