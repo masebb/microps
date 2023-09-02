@@ -1,9 +1,11 @@
+#include <asm-generic/errno-base.h>
 #include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <errno.h>
 
 #include "platform.h"
 
@@ -303,7 +305,130 @@ tcp_segment_arrives(struct tcp_segment_info *seg, uint8_t flags, uint8_t *data, 
     }
     return;
   }
-  //TODO
+  switch(pcb->state) {
+    case TCP_PCB_STATE_LISTEN:
+      /*
+       * 1st check for an RST
+       */
+      // 無視
+      if (TCP_FLG_ISSET(flags, TCP_FLG_RST)) {
+        return;
+      }
+      /*
+       * 2nd check for an ACK
+       */
+      // ACKフラグを含んでいたらRSTを送信
+      if (TCP_FLG_ISSET(flags, TCP_FLG_ACK)) { 
+        tcp_output_segment(seg->ack, 0, TCP_FLG_RST, 0, NULL, 0, local, foreign);
+        return;
+      }
+
+      /*
+       * 3rd check for an SYN
+       */
+      if (TCP_FLG_ISSET(flags, TCP_FLG_SYN)) {
+        /* ignore: security/compartment check */
+        /* ignore: precedence check */
+        pcb->local = *local;
+        pcb->foreign = *foreign;
+        pcb->rcv.wnd = sizeof(pcb->buf);
+        pcb->rcv.nxt = seg->seq + 1;
+        pcb->irs = seg->seq;
+        pcb->iss = random();
+        tcp_output(pcb, TCP_FLG_SYN | TCP_FLG_ACK, NULL, 0);
+        pcb->snd.nxt = pcb->iss;
+        pcb->snd.una = pcb->iss;
+        pcb->state = TCP_PCB_STATE_SYN_RECEIVED;
+
+        //TODO COPY COMMENT FROM SLIDE
+
+        return;
+      }
+
+      /*
+       * 4th other text or control
+       */
+
+      /* drop segment */
+      return;
+    case TCP_PCB_STATE_SYN_SENT:
+      /*
+       * 1st check the ACK bit
+       */
+
+      /*
+       * 2nd check the RST bit
+       */
+
+      /*
+       * 3rd check security and precedence (ignore)
+       */
+
+      /*
+       * 4th check the SYN bit
+       */
+
+      /*
+       * 5th, if neither of the SYN or RST bits is set then drop the segment and return
+       */
+      if (!TCP_FLG_ISSET(flags, TCP_FLG_ACK)) {
+        //drop
+        return;
+      }
+      switch (pcb->state) {
+        case TCP_PCB_STATE_SYN_RECEIVED:
+          // 送信セグメントに対する妥当なACK番号の範囲かチェック
+          if (pcb->snd.una <= seg->ack && seg->ack <= pcb->snd.nxt) {
+            // ESTABLISHEDに
+            pcb->state = TCP_PCB_STATE_ESTABLISHED;
+            sched_wakeup(&pcb->ctx);
+          } else {
+            tcp_output_segment(seg->ack, 0, TCP_FLG_RST, 0, NULL, 0, local, foreign);
+            return;
+          }
+          break;
+      }
+
+      /* drop segment */
+      return;
+  }
+  /*
+   * Otherwise
+   */
+
+  /*
+   * 1st check sequence number
+   */
+
+  /*
+   * 2nd check the RST bit
+   */
+
+  /*
+   * 3rd check security and precedence (ignore)
+   */
+
+  /*
+   * 4th check the SYN bit
+   */
+
+  /*
+   * 5th check the ACK field
+   */
+
+  /*
+   * 6th, check the URG bit (ignore)
+   */
+
+  /*
+   * 7th, process the segment text
+   */
+
+  /*
+   * 8th, check the FIN bit
+   */
+
+  return;
 }
 
 static void
@@ -378,6 +503,20 @@ tcp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct 
   return;
 }
 
+static void
+event_handler(void *arg)
+{
+    struct tcp_pcb *pcb;
+
+    mutex_lock(&mutex);
+    for (pcb = pcbs; pcb < tailof(pcbs); pcb++) {
+        if (pcb->state != TCP_PCB_STATE_FREE) {
+            sched_interrupt(&pcb->ctx);
+        }
+    }
+    mutex_unlock(&mutex);
+}
+
 int
 tcp_init(void)
 {
@@ -385,5 +524,101 @@ tcp_init(void)
     errorf("ip_protocol_register() failure");
     return -1;
   }
+  return 0;
+}
+
+/*
+ * TCP User Command (RFC793)
+ */
+
+int
+tcp_open_rfc793(struct ip_endpoint *local, struct ip_endpoint *foreign, int active)
+{
+  struct tcp_pcb *pcb;
+  char ep1[IP_ENDPOINT_STR_LEN];
+  char ep2[IP_ENDPOINT_STR_LEN];
+  int state, id;
+
+  mutex_lock(&mutex);
+  pcb = tcp_pcb_alloc();
+  if (!pcb) {
+    errorf("tcp_pcb_alloc() failure");
+    mutex_unlock(&mutex);
+    return -1;
+  }
+  // 能動的なオープンは未実装のため弾く
+  if (active) {
+    errorf("active open does not implemant");
+    tcp_pcb_release(pcb);
+    mutex_unlock(&mutex);
+    return -1;
+  } else {
+    debugf("passive open: local=%s, waiting for connection...", ip_endpoint_ntop(local, ep1, sizeof(ep1)));
+    pcb->local = *local;
+    if (foreign) {
+      pcb->foreign = *foreign;
+    }
+    pcb->state = TCP_PCB_STATE_LISTEN;
+  }
+AGAIN:
+  state = pcb->state;
+
+  // waiting for state changed
+  while (pcb->state == state) {
+    //タスクを休止
+    if (sched_sleep(&pcb->ctx, &mutex, NULL) == -1) {
+      //シグナルによる割り込みが発生
+      debugf("interrputed");
+      pcb->state = TCP_PCB_STATE_CLOSED;
+      tcp_pcb_release(pcb);
+      mutex_unlock(&mutex);
+      errno = EINTR;
+      return -1;
+    }
+  }
+
+  if (pcb->state != TCP_PCB_STATE_ESTABLISHED) {
+    if (pcb->state == TCP_PCB_STATE_SYN_RECEIVED) {
+      goto AGAIN;
+    }
+    errorf("open error: %d", pcb->state);
+    pcb->state = TCP_PCB_STATE_CLOSED;
+    tcp_pcb_release(pcb);
+    mutex_unlock(&mutex);
+    return -1;
+  }
+
+  id = tcp_pcb_id(pcb);
+
+  debugf("connection established: local=%s, foreign=%s",
+      ip_endpoint_ntop(&pcb->local, ep1, sizeof(ep1)),
+      ip_endpoint_ntop(&pcb->foreign, ep2, sizeof(ep2))
+      );
+  
+  mutex_unlock(&mutex);
+
+  // コネクションが確立したらpcbのidを返す
+  return id;
+}
+
+int
+tcp_close(int id)
+{
+  struct tcp_pcb *pcb;
+
+  mutex_lock(&mutex);
+  pcb = tcp_pcb_get(id);
+  if (!pcb) {
+    errorf("pcb not found");
+    mutex_unlock(&mutex);
+    return -1;
+  }
+
+  //暫定処置でRSTを送信
+  tcp_output(pcb, TCP_FLG_RST, NULL, 0);
+
+  tcp_pcb_release(pcb);
+  mutex_unlock(&mutex);
+
   return 0;
 }
