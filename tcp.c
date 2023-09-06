@@ -52,44 +52,44 @@ struct pseudo_hdr {
 };
 
 struct tcp_hdr {
-    uint16_t src;  //送信元ポート
-    uint16_t dst;  //送信ポート
-    uint32_t seq;  //シーケンス番号
-    uint32_t ack;  //確認応答番号
-    uint8_t off;  //Data Offset
-    uint8_t flg;  //フラグ
-    uint16_t wnd; //ウィンドウサイズ
-    uint16_t sum;  //チェックサム
-    uint16_t up; //緊急ポインタ(未使用)
+    uint16_t src;  // 送信元ポート
+    uint16_t dst;  // 送信ポート
+    uint32_t seq;  // シーケンス番号
+    uint32_t ack;  // 確認応答番号
+    uint8_t off;  // Data Offset
+    uint8_t flg;  // フラグ
+    uint16_t wnd; // ウィンドウサイズ
+    uint16_t sum;  // チェックサム
+    uint16_t up; // urgent pointer 緊急ポインタ(未使用)
 };
 
 struct tcp_segment_info {
-    uint32_t seq;  //シーケンス番号
-    uint32_t ack;  //確認応答番号
-    uint16_t len;  //シーケンス番号を消費するデータ長
+    uint32_t seq;  // シーケンス番号
+    uint32_t ack;  // 確認応答番号
+    uint16_t len;  // シーケンス番号を消費するデータ長
     uint16_t wnd;  // 受信ウィンドウ(相手の受信バッファの空き)
-    uint16_t up;  //緊急ポインタ(未使用)
+    uint16_t up;  // urgent pointer 緊急ポインタ(未使用)
 };
 
 struct tcp_pcb {
-    int state; //コネクション状態
-    struct ip_endpoint local; //local側コネクション情報
-    struct ip_endpoint foreign;  //foreign側コネクション情報
+    int state; // コネクション状態
+    struct ip_endpoint local; // local側コネクション情報
+    struct ip_endpoint foreign;  // foreign側コネクション情報
     struct {
-        uint32_t nxt;  //次に送信するシーケンス番号
-        uint32_t una;  //ACKが帰ってきてない最後のシーケンス番号
-        uint16_t wnd;  //相手の受信ウィンドウ
-        uint16_t up;   //緊急ポインタ(未使用)
-        uint32_t wl1;  //snd.windを更新した時の受信セグメントのシーケンス番号
-        uint32_t wl2;  //snd.windを更新した際の受信セグメントのACK番号
-    } snd; //送信時に必要な情報
-    uint32_t iss; //自分の初期シーケンス番号
+        uint32_t nxt;  // next 次に送信するシーケンス番号
+        uint32_t una;  // unacknowleged sequence number ACKが帰ってきてない最後のシーケンス番号
+        uint16_t wnd;  // 相手の受信ウィンドウ
+        uint16_t up;   // urgent pointer 緊急ポインタ(未使用)
+        uint32_t wl1;  // snd.windを更新した時の受信セグメントのシーケンス番号
+        uint32_t wl2;  // snd.windを更新した際の受信セグメントのACK番号
+    } snd; // 送信時に必要な情報
+    uint32_t iss; // 自分の初期シーケンス番号
     struct {
-        uint32_t nxt; //次に受信を期待するシーケンス番号
-        uint16_t wnd; //自分の受信ウィンドウ
-        uint16_t up;  //緊急ポインタ(未使用)
+        uint32_t nxt; // 次に受信を期待するシーケンス番号
+        uint16_t wnd; // 自分の受信ウィンドウ
+        uint16_t up;  // urgent pointer 緊急ポインタ(未使用)
     } rcv; //受信時に必要な情報
-    uint32_t irs;  //相手の初期シーケンス番号
+    uint32_t irs;  // initial receive sequence number 相手の初期シーケンス番号
     uint16_t mtu;  //送信デバイスのMTU
     uint16_t mss;  //最大セグメントサイズ
     uint8_t buf[65535]; // 受信バッファ
@@ -248,12 +248,12 @@ tcp_output_segment(uint32_t seq, uint32_t ack, uint8_t flg, uint16_t wnd, uint8_
   hdr = (struct tcp_hdr *)buf;
 
   // ヘッダ作成
+  hdr->src = local->port;
+  hdr->dst = foreign->port;
   hdr->seq = hton32(seq);
   hdr->ack = hton32(ack);
   hdr->flg = flg;
   hdr->wnd = hton16(wnd);
-  hdr->src = local->port;
-  hdr->dst = foreign->port;
   hdr->up = 0;
   hdr->off = (sizeof(*hdr) >> 2) << 4;
   memcpy(hdr+1, data, len);
@@ -460,6 +460,17 @@ tcp_segment_arrives(struct tcp_segment_info *seg, uint8_t flags, uint8_t *data, 
       /*
        * 1st check the ACK bit
        */
+      if (TCP_FLG_ISSET(flags, TCP_FLG_ACK)) {
+        // 送信していないシーケンス番号に対するACKだった場合RSTで迎撃
+        if (seg->ack <= pcb->iss || seg->ack > pcb->snd.nxt) {
+          tcp_output_segment(seg->ack, 0, TCP_FLG_RST, 0, NULL, 0, local, foreign);
+          return;
+        }
+        // まだACKの応答が得られていないシーケンス番号に対する者だったら受け入れる
+        if (pcb->snd.una <= seg->ack && seg->ack <= pcb->snd.nxt) {
+          acceptable = 1;
+        }
+      }
 
       /*
        * 2nd check the RST bit
@@ -472,6 +483,42 @@ tcp_segment_arrives(struct tcp_segment_info *seg, uint8_t flags, uint8_t *data, 
       /*
        * 4th check the SYN bit
        */
+      if (TCP_FLG_ISSET(flags, TCP_FLG_SYN)) {
+        pcb->rcv.nxt = seg->seq + 1; // 次に送信すべきシーケンス番号を更新
+        pcb->irs = seg->seq; //相手の初期シーケンス番号を保存する
+        if (acceptable) {
+          pcb->snd.una = seg->ack;
+          tcp_retransmit_queue_cleanup(pcb); // 再送キューから到達が確認できたTCPセグメントを削除
+        }
+
+        if (pcb->snd.una > pcb->iss) {
+          // ACKを受け入れた際の処理
+          
+          pcb->snd.una = seg->ack;
+          tcp_retransmit_queue_cleanup(pcb);
+        }
+
+        if (pcb->snd.una > pcb->iss) {
+          // 初期シーケンス番号に対するACKが得られていた場合の処理
+          
+          pcb->state = TCP_PCB_STATE_ESTABLISHED;
+          tcp_output(pcb, TCP_FLG_ACK, NULL, 0); // SYNに対するACKを返す
+          /* NOTE: not specified in the RFC793, but send window initialization required */
+          pcb->snd.wnd = seg->wnd;
+          pcb->snd.wl1 = seg->seq;
+          pcb->snd.wl2 = seg->ack;
+          sched_wakeup(&pcb->ctx);
+          /* ignore: continue processing at the sixth step below where the URG bit is checked */
+
+          return;
+        } else {
+          // 同時オープン(両方が同時にSYNを送った場合)に対処するためのコード
+          pcb->state = TCP_PCB_STATE_SYN_RECEIVED;
+          tcp_output(pcb, TCP_FLG_SYN | TCP_FLG_ACK, NULL, 0);
+          /* ignore: If there are other controls or text in the segment, queue them for processing after the ESTABLISHED state has been reached */
+          return;
+        }
+      }
 
       /*
        * 5th, if neither of the SYN or RST bits is set then drop the segment and return
@@ -722,6 +769,7 @@ tcp_init(void)
     errorf("net_timer_register() failure");
     return -1;
   }
+  net_event_subscribe(event_handler, NULL);
   return 0;
 }
 
@@ -744,12 +792,24 @@ tcp_open_rfc793(struct ip_endpoint *local, struct ip_endpoint *foreign, int acti
     mutex_unlock(&mutex);
     return -1;
   }
-  // 能動的なオープンは未実装のため弾く
+  // 能動的オープン( Active Open )
   if (active) {
-    errorf("active open does not implemant");
-    tcp_pcb_release(pcb);
-    mutex_unlock(&mutex);
-    return -1;
+    debugf("active open: local=%s, foreign=%s, connecting...", ip_endpoint_ntop(local, ep1, sizeof(ep1)), ip_endpoint_ntop(foreign, ep2, sizeof(ep2)));
+    pcb->local = *local;
+    pcb->foreign = *foreign;
+    pcb->rcv.wnd = sizeof(pcb->buf);
+    pcb->iss = random();
+    // SYNを送信
+    if (tcp_output(pcb, TCP_FLG_SYN, NULL, 0) == -1) {
+      errorf("tcp_output() failure");
+      pcb->state = TCP_PCB_STATE_CLOSED;
+      tcp_pcb_release(pcb);
+      mutex_unlock(&mutex);
+      return -1;
+    }
+    pcb->snd.una = pcb->iss; // まだACKの確認が得られてないシーケンス番号として設定
+    pcb->snd.nxt = pcb->iss + 1;
+    pcb->state = TCP_PCB_STATE_SYN_SENT;
   } else {
     debugf("passive open: local=%s, waiting for connection...", ip_endpoint_ntop(local, ep1, sizeof(ep1)));
     pcb->local = *local;
