@@ -95,7 +95,7 @@ main(int argc, char *argv[])
     errorf("setup() failure");
     return -1;
   }
-  ip_endpoint_pton("0.0.0.0:7", &local);
+  ip_endpoint_pton("192.0.2.2:7", &local);
   ip_endpoint_pton("192.0.2.1:10007", &foreign);
   soc = tcp_open_rfc793(&local, &foreign, 1);
   if (soc == -1) {

@@ -255,9 +255,9 @@ tcp_output_segment(uint32_t seq, uint32_t ack, uint8_t flg, uint16_t wnd, uint8_
   hdr->flg = flg;
   hdr->wnd = hton16(wnd);
   hdr->up = 0;
+  hdr->sum = 0;
   hdr->off = (sizeof(*hdr) >> 2) << 4;
   memcpy(hdr+1, data, len);
-  hdr->sum = 0;
 
   //疑似ヘッダ
   pseudo.src = local->addr;
