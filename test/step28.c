@@ -73,7 +73,11 @@ static int setup(void) {
   return 0;
 }
 
-static void cleanup(void) { net_shutdown(); }
+static void cleanup(void) {
+  // コネクションの後始末のため少し待つ
+  sleep(1);
+  net_shutdown(); 
+}
 
 int main(int argc, char *argv[]) {
   struct ip_endpoint local, foreign;
